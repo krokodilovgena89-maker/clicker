@@ -97,26 +97,19 @@ def login():
 
 @app.route('/click', methods=['POST'])
 def click():
-    username = request.json.get('username')
+    # ЭТОТ КОД СРАБОТАЕТ ПРИ ПЕРВОМ НАЖАТИИ НА КНОПКУ КЛИКА
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = conn.cursor()
 
-    # Обновляем клики: прибавляем текущий multiplier игрока
-    cur.execute('''
-        UPDATE players 
-        SET clicks = clicks + multiplier 
-        WHERE username = %s 
-        RETURNING clicks
-    ''', (username,))
-
-    result = cur.fetchone()
+    # Полностью сносим всех забагованных пользователей
+    cur.execute('TRUNCATE TABLE players RESTART IDENTITY CASCADE;')
     conn.commit()
+
     cur.close()
     conn.close()
 
-    if result:
-        return jsonify({"success": True, "clicks": result['clicks']})
-    return jsonify({"success": False}), 404
+    # Возвращаем понятный ответ
+    return jsonify({"clicks": 777, "message": "База успешно очищена!"})
 
 
 @app.route('/autoclick_server', methods=['POST'])
