@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Панель управления</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #f4f4f4; }
+        table { width: 100%; border-collapse: collapse; background: white; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #007bff; color: white; }
+        tr:nth-child(even) { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>Управление игроками</h1>
+    <table>
+        <tr>
+            <th>Никнейм</th>
+            <th>Клики</th>
+            <th>Множитель</th>
+            <th>Автокликеры</th>
+            <th>Пароль</th>
+        </tr>
+        {% for username, data in players.items() %}
+        <tr>
+            <td>{{ username }}</td>
+            <td>{{ data.clicks }}</td>
+            <td>x{{ data.multiplier }}</td>
+            <td>{{ data.auto_clickers }}</td>
+            <td><code>{{ data.password }}</code></td>
+        </tr>
+        {% endfor %}
+    </table>
+    <br>
+    <a href="/">Вернуться к игре</a>
+</body>
+</html>
