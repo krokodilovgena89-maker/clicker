@@ -17,6 +17,12 @@
         body.dark #chat-box { background: #222; border-color: #444; }
         .shop-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .logout-btn { background: #dc3545; font-size: 12px; padding: 5px 10px; float: right; }
+
+        /* Стили для таблицы топа */
+        .top-table { width: 100%; border-collapse: collapse; margin-top: 10px; text-align: left; }
+        .top-table th, .top-table td { padding: 8px; border-bottom: 1px solid #ddd; }
+        body.dark .top-table th, body.dark .top-table td { border-bottom: 1px solid #444; }
+        .top-table th { font-weight: bold; color: #28a745; }
     </style>
 </head>
 <body>
@@ -53,6 +59,21 @@
                 <div id="chat-box"></div>
                 <input type="text" id="chat-msg" placeholder="Текст..." style="width: 65%;">
                 <button class="btn" onclick="sendMsg()">></button>
+            </div>
+
+            <div class="box">
+                <h3>🏆 Топ-10 Игроков</h3>
+                <table class="top-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 15%;">Место</th>
+                            <th>Игрок</th>
+                            <th style="text-align: right;">Клики 💰</th>
+                        </tr>
+                    </thead>
+                    <tbody id="top-list">
+                        </tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -125,11 +146,12 @@
         function startLoops() {
             setInterval(refreshChat, 5000);
             setInterval(sendAutoClickToServer, 3000);
+            setInterval(refreshTop, 3000); // Обновляем топ каждые 3 секунды
+            refreshTop(); // Запускаем один раз сразу при входе
         }
 
         // Запрос актуальных данных игрока с сервера (нужно при перезагрузке)
         async function refreshUserData() {
-            // Фейковый клик с 0 результатом, чтобы просто получить инфу из базы, либо используем логин повторно
             const res = await fetch('/login', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -168,7 +190,6 @@
             });
             const d = await res.json();
             if(d.success) {
-                // Синхронизируем UI с новыми данными ответа сервера
                 updateUI({clicks: d.clicks, multiplier: d.multiplier, auto_clickers: d.auto});
             } else if(d.message) {
                 alert(d.message);
@@ -209,6 +230,32 @@
                 const cb = document.getElementById('chat-box');
                 cb.scrollTop = cb.scrollHeight;
             } catch(e) {}
+        }
+
+        // НОВАЯ ФУНКЦИЯ ДЛЯ ЗАГРУЗКИ ТОПА ИГРОКОВ
+        async function refreshTop() {
+            try {
+                const res = await fetch('/top');
+                const topData = await res.json();
+
+                let html = "";
+                topData.forEach((player, index) => {
+                    let medal = index + 1;
+                    if (medal === 1) medal = "🥇";
+                    else if (medal === 2) medal = "🥈";
+                    else if (medal === 3) medal = "🥉";
+
+                    html += `<tr>
+                        <td><b>${medal}</b></td>
+                        <td>${player.username}</td>
+                        <td style="text-align: right; font-weight: bold;">${player.clicks}</td>
+                    </tr>`;
+                });
+
+                document.getElementById('top-list').innerHTML = html;
+            } catch(e) {
+                console.log("Ошибка загрузки топа:", e);
+            }
         }
     </script>
 </body>
