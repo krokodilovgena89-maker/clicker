@@ -150,15 +150,19 @@
             refreshTop(); // Запускаем один раз сразу при входе
         }
 
-        // Запрос актуальных данных игрока с сервера (нужно при перезагрузке)
+            // Запрос актуальных данных игрока с сервера при перезагрузке страницы
         async function refreshUserData() {
-            const res = await fetch('/login', {
+            if (!user) return;
+            const res = await fetch('/get_profile', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({username: user, password: ""})
+                body: JSON.stringify({username: user}) // Отправляем только ник
             });
             const d = await res.json();
-            if (d.success) updateUI(d.data);
+            if (d.success) {
+                updateUI(d.data); // Намертво фиксируем реальные цифры на экране!
+            }
+        }
         }
 
         function updateUI(data) {

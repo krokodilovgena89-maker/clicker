@@ -119,6 +119,28 @@ def click():
     return jsonify({"success": False}), 404
 
 
+@app.route('/get_profile', methods=['POST'])
+def get_profile():
+    data = request.json
+    username = data.get('username')
+    if not username:
+        return jsonify({"success": False, "message": "Не указан ник"})
+
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+
+    # Просто находим игрока в базе по нику без всяких паролей
+    cur.execute('SELECT clicks, multiplier, auto_clickers FROM players WHERE username = %s', (username,))
+    player = cur.fetchone()
+
+    cur.close()
+    conn.close()
+
+    if player:
+        return jsonify({"success": True, "data": player})
+    return jsonify({"success": False, "message": "Игрок не найден"})
+
+
 @app.route('/autoclick_server', methods=['POST'])
 def autoclick_server():
     username = request.json.get('username')
