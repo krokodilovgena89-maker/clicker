@@ -126,19 +126,19 @@ def get_profile():
     if not username:
         return jsonify({"success": False, "message": "Не указан ник"})
 
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute('SELECT clicks, multiplier, auto_clickers FROM players WHERE username = %s', (username,))
+        player = cur.fetchone()
+        cur.close()
+        conn.close()
 
-    # Просто находим игрока в базе по нику без всяких паролей
-    cur.execute('SELECT clicks, multiplier, auto_clickers FROM players WHERE username = %s', (username,))
-    player = cur.fetchone()
-
-    cur.close()
-    conn.close()
-
-    if player:
-        return jsonify({"success": True, "data": player})
-    return jsonify({"success": False, "message": "Игрок не найден"})
+        if player:
+            return jsonify({"success": True, "data": player})
+        return jsonify({"success": False, "message": "Игрок не найден"})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
 
 
 @app.route('/autoclick_server', methods=['POST'])
@@ -233,9 +233,24 @@ def buy():
 
 @app.route('/top', methods=['GET'])
 def get_top():
-    conn = get_db_connection()
-    cur = conn.cursor()
+    try:
+        conn = get_db_connection()
+        # RealDictCursor обязателен, чтобы данные отдавались в виде понятного JSON
+        cur = conn.cursor(cursor_factory=RealDictCursor)
 
+        # Берем ник и клики, сортируем от самых больших к меньшим, ограничиваем топ-10
+        cur.execute('SELECT username, clicks FROM players ORDER BY clicks DESC LIMIT 10;')
+        top_players = cur.fetchall()
+
+        cur.close()
+        conn.close()
+
+        # Отправляем данные в браузер
+        return jsonify(top_players)
+    except Exception as e:
+        print("Ошибка при получении топа:", e)
+        # Если что-то пошло не так, возвращаем пустой список, чтобы сайт не зависал
+        return jsonify([])
 
 @app.route('/chat', methods=['GET', 'POST'])
 def chat():
