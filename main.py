@@ -214,14 +214,6 @@ def get_top():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # Очищаем таблицу игроков подчистую
-    cur.execute('TRUNCATE TABLE players RESTART IDENTITY CASCADE;')
-    conn.commit()
-
-    cur.close()
-    conn.close()
-    return jsonify({"message": "База успешно очищена! Можно регистрироваться заново."})
-
 
 @app.route('/chat', methods=['GET', 'POST'])
 def chat():
