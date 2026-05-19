@@ -33,7 +33,7 @@
         </div>
 
         <div id="auth" class="box" style="margin-top: 50px;">
-            <h2>Войти в игру</h2>
+            <h2>Войти в игре</h2>
             <input type="text" id="user" placeholder="Ваш ник"><br>
             <input type="password" id="pass" placeholder="Пароль"><br>
             <button class="btn" onclick="login()">Играть</button>
@@ -81,19 +81,16 @@
     <script>
         let user = "";
 
-        // ПРОВЕРКА СОХРАНЕННЫХ ДАННЫХ ПРИ ЗАГРУЗКЕ СТРАНИЦЫ
         window.onload = function() {
-            // Восстанавливаем тему
             if (localStorage.getItem('theme') === 'dark') {
                 document.body.classList.add('dark');
             }
 
-            // Восстанавливаем сессию игрока
             const savedUser = localStorage.getItem('username');
             if (savedUser) {
                 user = savedUser;
                 showGameInterface();
-                refreshUserData(); // Подтягиваем его актуальный баланс и цены с сервера
+                refreshUserData();
                 startLoops();
             }
         };
@@ -112,23 +109,25 @@
             const passwordInput = document.getElementById('pass').value.trim();
             if(!usernameInput) return;
 
-            const res = await fetch('/login', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({username: usernameInput, password: passwordInput})
-            });
-            const d = await res.json();
+            try {
+                const res = await fetch('/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: usernameInput, password: passwordInput})
+                });
+                const d = await res.json();
 
-            if(d.success) {
-                user = usernameInput;
-                // Запоминаем ник в браузере
-                localStorage.setItem('username', user);
-
-                showGameInterface();
-                updateUI(d.data);
-                startLoops();
-            } else {
-                alert(d.message);
+                if(d.success) {
+                    user = usernameInput;
+                    localStorage.setItem('username', user);
+                    showGameInterface();
+                    updateUI(d.data);
+                    startLoops();
+                } else {
+                    alert(d.message);
+                }
+            } catch (e) {
+                console.error(e);
             }
         }
 
@@ -140,29 +139,29 @@
 
         function logout() {
             localStorage.removeItem('username');
-            location.reload(); // Перезапускаем страницу
+            location.reload();
         }
 
         function startLoops() {
             setInterval(refreshChat, 5000);
             setInterval(sendAutoClickToServer, 3000);
-            setInterval(refreshTop, 3000); // Обновляем топ каждые 3 секунды
-            refreshTop(); // Запускаем один раз сразу при входе
+            setInterval(refreshTop, 3000);
+            refreshTop();
         }
 
-            // Запрос актуальных данных игрока с сервера при перезагрузке страницы
         async function refreshUserData() {
             if (!user) return;
-            const res = await fetch('/get_profile', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({username: user}) // Отправляем только ник
-            });
-            const d = await res.json();
-            if (d.success) {
-                updateUI(d.data); // Намертво фиксируем реальные цифры на экране!
+            try {
+                const res = await fetch('/get_profile', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: user})
+                });
+                const d = await res.json();
+                if (d.success) updateUI(d.data);
+            } catch(e) {
+                console.error(e);
             }
-        }
         }
 
         function updateUI(data) {
@@ -175,42 +174,47 @@
 
         async function doClick() {
             if(!user) return;
-            const res = await fetch('/click', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({username: user})
-            });
-            const d = await res.json();
-            if(d.clicks !== undefined) document.getElementById('balance').innerText = d.clicks;
+            try {
+                const res = await fetch('/click', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: user})
+                });
+                const d = await res.json();
+                if(d.clicks !== undefined) document.getElementById('balance').innerText = d.clicks;
+            } catch(e) {}
         }
 
-        // ИСПРАВЛЕННЫЙ МАГАЗИН
         async function buy(item) {
             if(!user) return;
-            const res = await fetch('/buy', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({username: user, item: item})
-            });
-            const d = await res.json();
-            if(d.success) {
-                updateUI({clicks: d.clicks, multiplier: d.multiplier, auto_clickers: d.auto});
-            } else if(d.message) {
-                alert(d.message);
-            }
+            try {
+                const res = await fetch('/buy', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: user, item: item})
+                });
+                const d = await res.json();
+                if(d.success) {
+                    updateUI({clicks: d.clicks, multiplier: d.multiplier, auto_clickers: d.auto});
+                } else if(d.message) {
+                    alert(d.message);
+                }
+            } catch(e) {}
         }
 
         async function sendAutoClickToServer() {
             if(!user) return;
-            const res = await fetch('/autoclick_server', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({username: user})
-            });
-            const d = await res.json();
-            if(d.success) {
-                document.getElementById('balance').innerText = d.clicks;
-            }
+            try {
+                const res = await fetch('/autoclick_server', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: user})
+                });
+                const d = await res.json();
+                if(d.success) {
+                    document.getElementById('balance').innerText = d.clicks;
+                }
+            } catch(e) {}
         }
 
         async function sendMsg() {
@@ -218,12 +222,14 @@
             const text = input.value.trim();
             if(!text || !user) return;
             input.value = "";
-            await fetch('/chat', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({username: user, text: text})
-            });
-            refreshChat();
+            try {
+                await fetch('/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: user, text: text})
+                });
+                refreshChat();
+            } catch(e) {}
         }
 
         async function refreshChat() {
@@ -236,29 +242,29 @@
             } catch(e) {}
         }
 
-        // НОВАЯ ФУНКЦИЯ ДЛЯ ЗАГРУЗКИ ТОПА ИГРОКОВ
         async function refreshTop() {
             try {
                 const res = await fetch('/top');
                 const topData = await res.json();
 
                 let html = "";
-                topData.forEach((player, index) => {
-                    let medal = index + 1;
-                    if (medal === 1) medal = "🥇";
-                    else if (medal === 2) medal = "🥈";
-                    else if (medal === 3) medal = "🥉";
+                if (Array.isArray(topData)) {
+                    topData.forEach((player, index) => {
+                        let medal = index + 1;
+                        if (medal === 1) medal = "🥇";
+                        else if (medal === 2) medal = "🥈";
+                        else if (medal === 3) medal = "🥉";
 
-                    html += `<tr>
-                        <td><b>${medal}</b></td>
-                        <td>${player.username}</td>
-                        <td style="text-align: right; font-weight: bold;">${player.clicks}</td>
-                    </tr>`;
-                });
-
+                        html += `<tr>
+                            <td><b>${medal}</b></td>
+                            <td>${player.username}</td>
+                            <td style="text-align: right; font-weight: bold;">${player.clicks}</td>
+                        </tr>`;
+                    });
+                }
                 document.getElementById('top-list').innerHTML = html;
             } catch(e) {
-                console.log("Ошибка загрузки топа:", e);
+                console.error("Ошибка загрузки топа:", e);
             }
         }
     </script>
