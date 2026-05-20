@@ -336,5 +336,94 @@ def admin_clear_chat():
         return jsonify({"success": False, "message": str(e)}), 500
 
 
+@app.route('/support', methods=['GET', 'POST'])
+def support():
+    conn = get_db_connection()
+
+    if request.method == 'POST':
+        data = request.json
+        user_msg = data.get('username')
+        text_msg = data.get('text', '').strip()
+        sender = data.get('sender', user_msg)
+
+        if text_msg and user_msg:
+            cur = conn.cursor()
+            cur.execute('''
+                INSERT INTO support_messages (username, sender, text, time) 
+                VALUES (%s, %s, %s, %s)
+            ''', (user_msg, sender, text_msg, datetime.now().strftime("%H:%M")))
+            conn.commit()
+            cur.close()
+
+        conn.close()
+        return jsonify({"success": True})
+
+    # GET запрос (все эти строки должны быть внутри функции!)
+    username = request.args.get('username')
+    if not username:
+        conn.close()
+        return jsonify([])
+
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute('''
+        SELECT sender, text, time FROM support_messages 
+        WHERE username = %s ORDER BY id ASC
+    ''', (username,))
+    messages = cur.fetchall()
+    cur.close()
+    conn.close()
+    return jsonify(messages)
+
+
+@app.route('/admin/support_chats', methods=['GET'])
+def admin_support_chats():
+    auth = request.authorization
+    if not auth or not (auth.username == 'admin' and auth.password == 'qwerty1234'):
+        return jsonify({"success": False}), 401
+
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+
+    try:
+        # Берем просто список всех уникальных ников, кто вообще когда-либо писал
+        cur.execute('SELECT DISTINCT username FROM support_messages;')
+        chats = cur.fetchall()
+        cur.close()
+        conn.close()
+        return jsonify(chats)
+    except Exception as e:
+        print("Ошибка при получении списка чатов в админке:", e)
+        if conn:
+            conn.close()
+        return jsonify([])
+
+
+def init_db():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Создаем таблицу для техподдержки
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS support_messages (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                sender VARCHAR(50) NOT NULL,
+                text TEXT NOT NULL,
+                time VARCHAR(10) NOT NULL,
+                is_read BOOLEAN DEFAULT FALSE
+            );
+        ''')
+
+        conn.commit()
+        cur.close()
+        conn.close()
+        print("База данных успешно проверена и обновлена!")
+    except Exception as e:
+        print("Ошибка при создании таблицы поддержки:", e)
+
+
 if __name__ == '__main__':
+    init_db()
+    app.run(debug=True)
     app.run(host='0.0.0.0', port=5000)

@@ -5,6 +5,49 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Clicker & Chat</title>
     <style>
+        /* Круглая кнопка поддержки */
+.support-trigger {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    background: #007bff;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    z-index: 1000;
+    transition: 0.2s;
+}
+.support-trigger:hover { transform: scale(1.1); }
+
+/* Боковая панель чата */
+.support-panel {
+    position: fixed;
+    top: 0;
+    right: -320px; /* Изначально спрятана справа */
+    width: 300px;
+    height: 100%;
+    background: white;
+    box-shadow: -4px 0 10px rgba(0,0,0,0.2);
+    z-index: 999;
+    transition: 0.3s;
+    display: flex;
+    flex-direction: column;
+    padding: 15px;
+    text-align: left;
+}
+body.dark .support-panel { background: #222; color: white; }
+.support-panel.open { right: 0; }
+.support-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
+.support-box { flex-grow: 1; overflow-y: auto; margin: 10px 0; padding: 5px; border: 1px solid #eee; border-radius: 5px; }
+body.dark .support-box { border-color: #444; }
+
         body { font-family: 'Segoe UI', sans-serif; transition: 0.3s; text-align: center; margin: 0; padding: 10px; background: #eee; }
         body.dark { background: #1a1a1a; color: white; }
         .container { max-width: 500px; margin: auto; }
@@ -92,6 +135,19 @@
             </div>
         </div>
     </div>
+    <div id="support-btn" class="support-trigger" style="display:none;" onclick="toggleSupportPanel()">💬</div>
+
+<div id="support-panel" class="support-panel">
+    <div class="support-header">
+        <h3>Поддержка 🛠️</h3>
+        <button class="btn" style="padding:5px 10px; background:#dc3545;" onclick="toggleSupportPanel()">X</button>
+    </div>
+    <div id="support-box" class="support-box"></div>
+    <div style="display:flex;">
+        <input type="text" id="support-msg" placeholder="Ваш вопрос..." style="width:75%; margin:0; padding:8px;">
+        <button class="btn" style="width:25%;" onclick="sendSupportMsg()">></button>
+    </div>
+</div>
 
     <script>
         let user = "";
@@ -150,6 +206,7 @@
             document.getElementById('auth').style.display = 'none';
             document.getElementById('game').style.display = 'block';
             document.getElementById('logout').style.display = 'inline-block';
+            document.getElementById('support-btn').style.display = 'flex';
         }
 
         function logout() {
@@ -326,6 +383,46 @@
                 console.error("Ошибка загрузки топа:", e);
             }
         }
+        function toggleSupportPanel() {
+    const panel = document.getElementById('support-panel');
+    panel.classList.toggle('open');
+    if(panel.classList.contains('open')) refreshSupport();
+}
+
+async function sendSupportMsg() {
+    const input = document.getElementById('support-msg');
+    const text = input.value.trim();
+    if(!text || !user) return;
+    input.value = "";
+
+    try {
+        await fetch('/support', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({username: user, text: text, sender: user})
+        });
+        refreshSupport();
+    } catch(e) {}
+}
+
+async function refreshSupport() {
+    if(!user || !document.getElementById('support-panel').classList.contains('open')) return;
+    try {
+        const res = await fetch(`/support?username=${user}`);
+        const msgs = await res.json();
+        let html = "";
+        msgs.forEach(m => {
+            if(m.sender === 'admin') {
+                html += `<div style="margin-bottom:8px;"><b style="color:#007bff;">Админ:</b> <span>${m.text}</span> <small style="color:#888;">${m.time}</small></div>`;
+            } else {
+                html += `<div style="margin-bottom:8px;"><b style="color:#28a745;">Вы:</b> <span>${m.text}</span> <small style="color:#888;">${m.time}</small></div>`;
+            }
+        });
+        const sb = document.getElementById('support-box');
+        sb.innerHTML = html;
+        sb.scrollTop = sb.scrollHeight;
+    } catch(e) {}
+}
     </script>
 </body>
 </html>
