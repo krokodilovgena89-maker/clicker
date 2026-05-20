@@ -33,5 +33,38 @@
     </table>
     <br>
     <a href="/">Вернуться к игре</a>
+<div style="background: #fff; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 500px; margin-left: auto; margin-right: auto; text-align: center;">
+    <h2 style="color: #dc3545; margin-top: 0;">🛠️ Управление чатом</h2>
+    <p style="color: #666;">Нажмите на кнопку ниже, чтобы полностью удалить все сообщения из игрового чата.</p>
+    <button onclick="clearChat()" style="background: #dc3545; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s;">
+        💥 Полная очистка чата
+    </button>
+</div>
+
+<script>
+async function clearChat() {
+    if (!confirm("Вы уверены, что хотите ПОЛНОСТЬЮ очистить весь чат? Это действие нельзя отменить!")) {
+        return;
+    }
+
+    try {
+        const res = await fetch('/admin/clear_chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const d = await res.json();
+
+        if (d.success) {
+            alert(d.message);
+            location.reload(); // Перезагрузим админку, чтобы зафиксировать успех
+        } else {
+            alert("Ошибка: " + d.message);
+        }
+    } catch (e) {
+        alert("Не удалось отправить запрос на сервер.");
+        console.error(e);
+    }
+}
+</script>
 </body>
 </html>

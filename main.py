@@ -3,44 +3,41 @@ import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from datetime import datetime
+import random
 
 app = Flask(__name__)
 
-# Берём URL базы данных из настроек Render. Если запускаем локально — можно вписать внутренний или внешний URL
-DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://admin:EVwq9lS8WmCbqQkjgdb57pLvZc1YT5B4@dpg-d862i10jo89c7384a9ug-a/clicker_db_t59u')
+# Полный и правильный URL базы данных из Render
+DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://admin:EVwq9lS8WmCbqQkjgdb57pLvZc1YT5B4@dpg-d862i10jo89c7384a9ug-a.frankfurt-postgres.render.com/clicker_db_t59u')
 
 
 def get_db_connection():
-    # Функция для быстрого подключения к базе данных
-    conn = psycopg2.connect(DATABASE_URL)
+    # Если запускаем локально (переменной среды нет), жестко задаем utf8 кодировку для Windows
+    if not os.environ.get('DATABASE_URL'):
+        conn = psycopg2.connect(DATABASE_URL, client_encoding='utf8')
+    else:
+        conn = psycopg2.connect(DATABASE_URL)
     return conn
 
 
 def init_db():
-    # Эта функция сама создаст нужные таблицы в базе данных при старте приложения
     conn = get_db_connection()
     cur = conn.cursor()
-
-    # Таблица для игроков
     cur.execute('''
         CREATE TABLE IF NOT EXISTS players (
             username TEXT PRIMARY KEY,
             password TEXT NOT NULL,
             clicks BIGINT DEFAULT 0,
             multiplier INT DEFAULT 1,
-            auto_clickers INT DEFAULT 0
+            auto_clickers INT DEFAULT 0,
+            name_color TEXT DEFAULT '#28a745'
         );
     ''')
 
-    # Таблица для чата
-    cur.execute('''
-        CREATE TABLE IF NOT EXISTS chat (
-            id SERIAL PRIMARY KEY,
-            username TEXT NOT NULL,
-            text TEXT NOT NULL,
-            time TEXT NOT NULL
-        );
-    ''')
+    try:
+        cur.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS name_color TEXT DEFAULT '#28a745';")
+    except Exception:
+        pass
 
     conn.commit()
     cur.close()
@@ -97,26 +94,36 @@ def login():
 
 @app.route('/click', methods=['POST'])
 def click():
-    username = request.json.get('username')
+    data = request.json
+    username = data.get('username')
+    if not username:
+        return jsonify({"error": "No username"}), 400
+
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
 
-    # Обновляем клики: прибавляем текущий multiplier игрока
-    cur.execute('''
-        UPDATE players 
-        SET clicks = clicks + multiplier 
-        WHERE username = %s 
-        RETURNING clicks
-    ''', (username,))
+    cur.execute('SELECT clicks, multiplier FROM players WHERE username = %s', (username,))
+    player = cur.fetchone()
 
-    result = cur.fetchone()
-    conn.commit()
+    if player:
+        # --- ЛОГИКА КРИТИЧЕСКОГО КЛИКА ---
+        is_crit = random.random() < 0.08  # Шанс 8% на критический клик
+        bonus = player['multiplier']
+
+        if is_crit:
+            bonus = player['multiplier'] * 10  # Крит дает х10 от твоего клика!
+
+        new_clicks = player['clicks'] + bonus
+        cur.execute('UPDATE players SET clicks = %s WHERE username = %s', (new_clicks, username))
+        conn.commit()
+
+        cur.close()
+        conn.close()
+        return jsonify({"clicks": new_clicks, "is_crit": is_crit, "bonus": bonus})
+
     cur.close()
     conn.close()
-
-    if result:
-        return jsonify({"success": True, "clicks": result['clicks']})
-    return jsonify({"success": False}), 404
+    return jsonify({"error": "User not found"}), 44
 
 
 @app.route('/get_profile', methods=['POST'])
@@ -177,80 +184,87 @@ def autoclick_server():
 @app.route('/buy', methods=['POST'])
 def buy():
     data = request.json
-    username, item = data.get('username'), data.get('item')
+    username = data.get('username')
+    item = data.get('item')
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-
     cur.execute('SELECT clicks, multiplier, auto_clickers FROM players WHERE username = %s', (username,))
-    p = cur.fetchone()
+    player = cur.fetchone()
 
-    if not p:
+    if not player:
         cur.close()
         conn.close()
-        return jsonify({"success": False})
+        return jsonify({"success": False, "message": "User not found"})
+
+    clicks = player['clicks']
 
     if item == 'double':
-        cost = 100 * p['multiplier']
-        if p['clicks'] >= cost:
-            cur.execute('''
-                UPDATE players 
-                SET clicks = clicks - %s, multiplier = multiplier + 1 
-                WHERE username = %s 
-                RETURNING clicks, multiplier, auto_clickers
-            ''', (cost, username))
+        cost = 100 * player['multiplier']
+        if clicks >= cost:
+            cur.execute('UPDATE players SET clicks = clicks - %s, multiplier = multiplier + 1 WHERE username = %s',
+                        (cost, username))
+            conn.commit()
         else:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Мало кликов!"})
+            return jsonify({"success": False, "message": "Недостаточно кликов!"})
 
     elif item == 'auto':
-        cost = 50 * (p['auto_clickers'] + 1)
-        if p['clicks'] >= cost:
-            cur.execute('''
-                UPDATE players 
-                SET clicks = clicks - %s, auto_clickers = auto_clickers + 1 
-                WHERE username = %s 
-                RETURNING clicks, multiplier, auto_clickers
-            ''', (cost, username))
+        cost = 50 * (player['auto_clickers'] + 1)
+        if clicks >= cost:
+            cur.execute(
+                'UPDATE players SET clicks = clicks - %s, auto_clickers = auto_clickers + 1 WHERE username = %s',
+                (cost, username))
+            conn.commit()
         else:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Мало кликов!"})
+            return jsonify({"success": False, "message": "Недостаточно кликов!"})
 
-    updated_p = cur.fetchone()
-    conn.commit()
+    elif item == 'color_red':
+        cost = 1000
+        if clicks >= cost:
+            cur.execute("UPDATE players SET clicks = clicks - %s, name_color = '#ff4757' WHERE username = %s",
+                        (cost, username))
+            conn.commit()
+        else:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Нужно 1,000 очков для Красного ника!"})
+
+    elif item == 'color_gold':
+        cost = 5000
+        if clicks >= cost:
+            cur.execute("UPDATE players SET clicks = clicks - %s, name_color = '#ffa500' WHERE username = %s",
+                        (cost, username))
+            conn.commit()
+        else:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Нужно 5,000 очков для Золотого ника!"})
+
+    cur.execute('SELECT clicks, multiplier, auto_clickers FROM players WHERE username = %s', (username,))
+    updated = cur.fetchone()
     cur.close()
     conn.close()
-
-    return jsonify({
-        "success": True,
-        "clicks": updated_p['clicks'],
-        "multiplier": updated_p['multiplier'],
-        "auto": updated_p['auto_clickers']
-    })
+    return jsonify({"success": True, "clicks": updated['clicks'], "multiplier": updated['multiplier'],
+                    "auto": updated['auto_clickers']})
 
 
 @app.route('/top', methods=['GET'])
 def get_top():
     try:
         conn = get_db_connection()
-        # RealDictCursor обязателен, чтобы данные отдавались в виде понятного JSON
         cur = conn.cursor(cursor_factory=RealDictCursor)
-
-        # Берем ник и клики, сортируем от самых больших к меньшим, ограничиваем топ-10
-        cur.execute('SELECT username, clicks FROM players ORDER BY clicks DESC LIMIT 10;')
+        cur.execute('SELECT username, clicks, name_color FROM players ORDER BY clicks DESC LIMIT 10;')
         top_players = cur.fetchall()
-
         cur.close()
         conn.close()
-
-        # Отправляем данные в браузер
         return jsonify(top_players)
-    except Exception as e:
-        print("Ошибка при получении топа:", e)
-        # Если что-то пошло не так, возвращаем пустой список, чтобы сайт не зависал
+    except Exception:
         return jsonify([])
+
 
 @app.route('/chat', methods=['GET', 'POST'])
 def chat():
@@ -270,14 +284,18 @@ def chat():
         conn.close()
         return jsonify({"success": True})
 
-    # GET запрос: возвращаем последние 15 сообщений
+    # GET запрос: соединяем таблицу чата с таблицей игроков (JOIN), чтобы забрать цвет каждого автора
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute('SELECT username as user, text, time FROM chat ORDER BY id DESC LIMIT 15')
+    cur.execute('''
+        SELECT chat.username as user, chat.text, chat.time, COALESCE(players.name_color, '#28a745') as color
+        FROM chat
+        LEFT JOIN players ON chat.username = players.username
+        ORDER BY chat.id DESC LIMIT 15
+    ''')
     messages = cur.fetchall()
     cur.close()
     conn.close()
 
-    # Разворачиваем список, чтобы старые сообщения были сверху, а новые снизу
     return jsonify(list(reversed(messages)))
 
 
@@ -294,9 +312,28 @@ def admin():
     cur.close()
     conn.close()
 
-    # Превращаем список игроков обратно в словарь для админки
     players_dict = {p['username']: p for p in all_players}
     return render_template('admin.html', players=players_dict)
+
+
+@app.route('/admin/clear_chat', methods=['POST'])
+def admin_clear_chat():
+    # Проверяем пароль админа, как и на самой странице админки
+    auth = request.authorization
+    if not auth or not (auth.username == 'admin' and auth.password == 'qwerty1234'):
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        # Очищаем таблицу чата полностью
+        cur.execute('DELETE FROM chat;')
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Чат успешно очищен!"})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 if __name__ == '__main__':

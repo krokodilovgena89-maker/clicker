@@ -23,6 +23,20 @@
         .top-table th, .top-table td { padding: 8px; border-bottom: 1px solid #ddd; }
         body.dark .top-table th, body.dark .top-table td { border-bottom: 1px solid #444; }
         .top-table th { font-weight: bold; color: #28a745; }
+
+        /* Радужный ник создателя */
+        @keyframes rainbow {
+            0% { color: #ff007f; }
+            33% { color: #00f5d4; }
+            66% { color: #7b2cbf; }
+            100% { color: #ff007f; }
+        }
+
+        .admin-rainbow-nick {
+            animation: rainbow 3s linear infinite !important;
+            font-weight: bold !important;
+            text-shadow: 0 0 8px rgba(0, 245, 212, 0.4);
+        }
     </style>
 </head>
 <body>
@@ -33,7 +47,7 @@
         </div>
 
         <div id="auth" class="box" style="margin-top: 50px;">
-            <h2>Войти в игре</h2>
+            <h2>Войти в игру</h2>
             <input type="text" id="user" placeholder="Ваш ник"><br>
             <input type="password" id="pass" placeholder="Пароль"><br>
             <button class="btn" onclick="login()">Играть</button>
@@ -51,6 +65,8 @@
                 <div class="shop-grid">
                     <button class="btn" style="background:#007bff" onclick="buy('double')">Множитель<br>(<span id="c-double">100</span> 💰)</button>
                     <button class="btn" style="background:#007bff" onclick="buy('auto')">Автоклик<br>(<span id="c-auto">50</span> 💰)</button>
+                    <button class="btn" style="background:#ff4757" onclick="buy('color_red')">🔴 Красный Ник<br>(1,000 💰)</button>
+                    <button class="btn" style="background:#ffa500" onclick="buy('color_gold')">👑 Золотой Ник<br>(5,000 💰)</button>
                 </div>
             </div>
 
@@ -71,8 +87,7 @@
                             <th style="text-align: right;">Клики 💰</th>
                         </tr>
                     </thead>
-                    <tbody id="top-list">
-                        </tbody>
+                    <tbody id="top-list"></tbody>
                 </table>
             </div>
         </div>
@@ -181,7 +196,19 @@
                     body: JSON.stringify({username: user})
                 });
                 const d = await res.json();
-                if(d.clicks !== undefined) document.getElementById('balance').innerText = d.clicks;
+                if(d.clicks !== undefined) {
+                    const balanceEl = document.getElementById('balance');
+                    balanceEl.innerText = d.clicks;
+
+                    if(d.is_crit) {
+                        balanceEl.style.color = '#ff1744';
+                        balanceEl.innerText = d.clicks + " 💥 КРИТ +" + d.bonus + "!";
+                        setTimeout(() => {
+                            balanceEl.style.color = document.body.classList.contains('dark') ? 'white' : 'black';
+                            balanceEl.innerText = d.clicks;
+                        }, 1000);
+                    }
+                }
             } catch(e) {}
         }
 
@@ -236,10 +263,32 @@
             try {
                 const res = await fetch('/chat');
                 const msgs = await res.json();
-                document.getElementById('chat-box').innerHTML = msgs.map(m => `<div><small>${m.time}</small> <b>${m.user}:</b> ${m.text}</div>`).join('');
+
+                let html = "";
+                if (Array.isArray(msgs)) {
+                    msgs.forEach(m => {
+                        let userColor = m.color || '#28a745';
+                        let nickHTML = "";
+
+                        if (m.user === 'admin') {
+                            nickHTML = `<b class="admin-rainbow-nick">${m.user}:</b>`;
+                        } else {
+                            nickHTML = `<b style="color: ${userColor};">${m.user}:</b>`;
+                        }
+
+                        html += `<div><span style="color: #aaa; font-size: 0.85rem;">[${m.time}]</span> ${nickHTML} <span>${m.text}</span></div>`;
+                    });
+                }
+
+                document.getElementById('chat-box').innerHTML = html;
+
                 const cb = document.getElementById('chat-box');
-                cb.scrollTop = cb.scrollHeight;
-            } catch(e) {}
+                if (cb) {
+                    cb.scrollTop = cb.scrollHeight;
+                }
+            } catch(e) {
+                console.error("Ошибка обновления чата:", e);
+            }
         }
 
         async function refreshTop() {
@@ -254,10 +303,20 @@
                         if (medal === 1) medal = "🥇";
                         else if (medal === 2) medal = "🥈";
                         else if (medal === 3) medal = "🥉";
+                        else medal = `🏅 ${medal}`;
+
+                        let userColor = player.name_color || '#28a745';
+                        let playerNickHTML = "";
+
+                        if (player.username === 'admin') {
+                            playerNickHTML = `<span class="admin-rainbow-nick">${player.username}</span>`;
+                        } else {
+                            playerNickHTML = `<span style="color: ${userColor}; font-weight: bold;">${player.username}</span>`;
+                        }
 
                         html += `<tr>
                             <td><b>${medal}</b></td>
-                            <td>${player.username}</td>
+                            <td>${playerNickHTML}</td>
                             <td style="text-align: right; font-weight: bold;">${player.clicks}</td>
                         </tr>`;
                     });
