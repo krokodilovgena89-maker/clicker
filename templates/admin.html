@@ -20,7 +20,7 @@
             <th>Множитель</th>
             <th>Автокликеры</th>
             <th>Пароль</th>
-        </tr>
+            <th>Действие</th> </tr>
         {% for username, data in players.items() %}
         <tr>
             <td>{{ username }}</td>
@@ -28,33 +28,44 @@
             <td>x{{ data.multiplier }}</td>
             <td>{{ data.auto_clickers }}</td>
             <td><code>{{ data.password }}</code></td>
+            <td>
+                {% if username != 'admin' %}
+                <button onclick="deleteUser('{{ username }}')" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 16px; padding: 0;" title="Удалить игрока">❌</button>
+                {% else %}
+                <span style="color: #aaa; font-size: 12px;">—</span>
+                {% endif %}
+            </td>
         </tr>
         {% endfor %}
     </table>
     <br>
     <a href="/">Вернуться к игре</a>
-<div style="background: #fff; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 500px; margin-left: auto; margin-right: auto; text-align: center;">
-    <h2 style="color: #dc3545; margin-top: 0;">🛠️ Управление чатом</h2>
-    <p style="color: #666;">Нажмите на кнопку ниже, чтобы полностью удалить все сообщения из игрового чата.</p>
-    <button onclick="clearChat()" style="background: #dc3545; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s;">
-        💥 Полная очистка чата
-    </button>
-</div>
-    <div style="display: grid; grid-template-columns: 250px 1fr; gap: 20px; max-width: 900px; margin: 20px auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); height: 450px;">
-    <div style="border-right: 1px solid #eee; padding-right: 15px; overflow-y: auto;">
-        <h3 style="margin-top:0; color:#007bff;">💬 Диалоги</h3>
-        <div id="admin-chats-list"></div>
+
+    <br><br>
+
+    <div style="background: #fff; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 500px; margin-left: auto; margin-right: auto; text-align: center;">
+        <h2 style="color: #dc3545; margin-top: 0;">🛠️ Управление чатом</h2>
+        <p style="color: #666;">Нажмите на кнопку ниже, чтобы полностью удалить все сообщения из игрового чата.</p>
+        <button onclick="clearChat()" style="background: #dc3545; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s;">
+            💥 Полная очистка чата
+        </button>
     </div>
 
-    <div style="display: flex; flex-direction: column; height: 100%;">
-        <h3 style="margin-top:0;">Разговор с: <span id="active-chat-user" style="color:#28a745;">Выбери чат</span></h3>
-        <div id="admin-support-box" style="flex-grow: 1; overflow-y: auto; border: 1px solid #ddd; padding: 10px; margin-bottom: 10px; border-radius: 6px; text-align: left;"></div>
-        <div style="display: flex;">
-            <input type="text" id="admin-reply-msg" placeholder="Ответ игроку..." style="flex-grow: 1; padding: 10px; border-radius: 6px; border: 1px solid #ccc;">
-            <button onclick="sendAdminReply()" style="background: #28a745; color: white; border: none; padding: 10px 20px; margin-left: 10px; border-radius: 6px; cursor: pointer; font-weight: bold;">Ответить</button>
+    <div style="display: grid; grid-template-columns: 250px 1fr; gap: 20px; max-width: 900px; margin: 20px auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); height: 450px;">
+        <div style="border-right: 1px solid #eee; padding-right: 15px; overflow-y: auto;">
+            <h3 style="margin-top:0; color:#007bff;">💬 Диалоги</h3>
+            <div id="admin-chats-list"></div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; height: 100%;">
+            <h3 style="margin-top:0;">Разговор с: <span id="active-chat-user" style="color:#28a745;">Выбери чат</span></h3>
+            <div id="admin-support-box" style="flex-grow: 1; overflow-y: auto; border: 1px solid #ddd; padding: 10px; margin-bottom: 10px; border-radius: 6px; text-align: left;"></div>
+            <div style="display: flex;">
+                <input type="text" id="admin-reply-msg" placeholder="Ответ игроку..." style="flex-grow: 1; padding: 10px; border-radius: 6px; border: 1px solid #ccc;">
+                <button onclick="sendAdminReply()" style="background: #28a745; color: white; border: none; padding: 10px 20px; margin-left: 10px; border-radius: 6px; cursor: pointer; font-weight: bold;">Ответить</button>
+            </div>
         </div>
     </div>
-</div>
 
 <script>
 let currentChatUser = "";
@@ -77,6 +88,31 @@ async function loadChatsList() {
         });
         document.getElementById('admin-chats-list').innerHTML = html;
     } catch(e) {}
+}
+
+async function deleteUser(username) {
+    if (!confirm(`Вы точно хотите ПОЛНОСТЬЮ удалить игрока "${username}" и обнулить его прогресс?`)) {
+        return;
+    }
+
+    try {
+        const res = await fetch('/admin/delete_user', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ username: username })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            alert(data.message);
+            location.reload(); // Перезагрузим страницу, чтобы обновить Топ игроков
+        } else {
+            alert("Ошибка: " + data.message);
+        }
+    } catch (e) {
+        alert("Не удалось отправить запрос на server.");
+        console.error(e);
+    }
 }
 
 function selectChat(username) {
@@ -137,7 +173,7 @@ async function clearChat() {
 
         if (d.success) {
             alert(d.message);
-            location.reload(); // Перезагрузим админку, чтобы зафиксировать успех
+            location.reload();
         } else {
             alert("Ошибка: " + d.message);
         }

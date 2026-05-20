@@ -398,6 +398,43 @@ def admin_support_chats():
         return jsonify([])
 
 
+@app.route('/admin/delete_user', methods=['POST'])
+def admin_delete_user():
+    # Проверяем пароль админа
+    auth = request.authorization
+    if not auth or not (auth.username == 'admin' and auth.password == 'qwerty1234'):
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+
+    data = request.json
+    username_to_delete = data.get('username')
+
+    if not username_to_delete:
+        return jsonify({"success": False, "message": "Ник игрока не передан"}), 400
+
+    if username_to_delete == 'admin':
+        return jsonify({"success": False, "message": "Нельзя удалить самого админа!"}), 400
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # 1. Удаляем игрока из таблицы пользователей
+        # (Замени 'users', если твоя таблица называется по-другому, например 'players')
+        cur.execute('DELETE FROM players WHERE username = %s;', (username_to_delete,))
+
+        # 2. Удаляем его переписку из поддержки, чтобы не ломать список диалогов
+        cur.execute('DELETE FROM support_messages WHERE username = %s;', (username_to_delete,))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"success": True, "message": f"Игрок {username_to_delete} успешно удален!"})
+    except Exception as e:
+        if conn:
+            conn.close()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
 def init_db():
     try:
         conn = get_db_connection()
